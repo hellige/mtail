@@ -26,7 +26,10 @@ import sys
 import stat
 import os
 import threading
-import signal
+try:
+    import signal
+except:
+    signal = None
 
 # config file location. this should be made platform-independent...
 if os.environ.has_key('HOME'):
@@ -54,7 +57,8 @@ def main():
     global multiple
     global active
     print
-    signal.signal(signal.SIGINT, handleInterrupt)
+    if signal:
+        signal.signal(signal.SIGINT, handleInterrupt)
     initial_lines, filenames, follow = processargs()
     config = ConfigFile(config_file)
     config.loadconfig()
@@ -170,7 +174,12 @@ def processargs():
         elif opt[0] in ['-q', '--quiet', '--silent']:
             silent = 1
         elif opt[0] in ['--tty']:
-            tty_only = 1
+            if hasattr(sys.stdout, 'isatty'):
+                tty_only = 1
+            else:
+                print 'this platform does not provide tty detection. ignoring --tty...'
+                print
+                tty_only = 0
         elif opt[0] in ['--config']:
             config_file = opt[1]
     if lines == None:
@@ -576,6 +585,35 @@ class ConfigFile:
         return (self.ansi, colors, 
             lambda x, f=filters: 
             reduce(lambda y, z, f=f: z[0].sub(z[1],y), f, x))
+
+# jython doesn't provide os.access, so we'll define it here.
+if not hasattr(os, 'access'):
+    try:
+        # if we're not in jython, this will fail and we're just out of
+        # luck. but i think everybody else provides os.access(), so that's
+        # probably fine...
+        from java.io import File
+
+        os.F_OK = 1
+        os.R_OK = 2
+        os.W_OK = 4
+     
+        # this code came from the jython-users list in 2002, courtesy of
+        # graham klyne.
+        def os_access(path, mode):
+            f = File(path)
+            if mode & os.F_OK:
+                if not f.exists(): return None
+            if mode & os.R_OK:
+                if not f.canRead(): return None
+            if mode & os.W_OK:
+                if not f.canWrite(): return None
+            return 1
+
+        os.access = os_access
+    except:
+        # we're just out of luck, i guess...
+        pass
 
 # now we'll call main()...
 main()

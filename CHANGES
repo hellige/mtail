@@ -3,6 +3,7 @@ mtail 1.2.0:
 	no coloring is performed, although filters still apply. this is similar in
 	spirit to the --color=auto option of gnu ls (thanks to hisham muhammad for
 	this idea).
+  * added jython support.
 
 mtail 1.1.1:
   * changed threading/signal handling code to accommodate changes in
