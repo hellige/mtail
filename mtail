@@ -27,7 +27,10 @@ import stat
 import os
 
 # config file location. this should be made platform-independent...
-config_file = os.environ['HOME']+os.sep+'.mtailrc'
+if os.environ.has_key('HOME'):
+    config_file = os.environ['HOME']+os.sep+'.mtailrc'
+else:
+    config_file = None
 # version number
 version_number = "0.9.2"
 
@@ -274,7 +277,8 @@ class ConfigFile:
     
     # load all configs from the file, parse and store internally.
     def loadconfig(self):
-        if not (os.path.exists(self.filename) and os.path.isfile(self.filename)
+        if self.filename == None or not (os.path.exists(self.filename) 
+                and os.path.isfile(self.filename)
                 and os.access(self.filename, os.R_OK)):
             self.stdinconfig = self.default
             return
