@@ -1,5 +1,6 @@
 mtail 0.9.1:
   * fixed bug regarding tailing of stdin.
+  * added semi-formal license.
 
 mtail 0.9.0:
   * initial released version.
