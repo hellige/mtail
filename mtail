@@ -28,6 +28,8 @@ import os
 
 # config file location. this should be made platform-independent...
 config_file = os.environ['HOME']+os.sep+'.mtailrc'
+# version number
+version_number = "0.9.0"
 
 # calls processargs(), sets up the tailer and then loops.
 def main():
@@ -40,13 +42,8 @@ def main():
 			os.sep)+1:])
 		tailer = TailFile(filename, follow)
 		tailer.seek_lines(initial_lines)
-	elif not follow:
-		print 'non-follow mode not supported on stdin...'
-		print
-		usage()
-		sys.exit(1)
 	else:
-		print 'reading stdin, will just follow...'
+		print '*** reading stdin, will just follow...'
 		print
 		ansi, colors, filter = config.getstdinconfig()
 		tailer = sys.stdin
@@ -68,7 +65,7 @@ def processargs():
 	lines = None
 	follow = 0
 	try:
-		opts, pargs = getopt.getopt(sys.argv[1:], 'fn:?', 
+		opts, pargs = getopt.getopt(sys.argv[1:], 'fn:?h', 
 			["follow", "lines=", "help"])
 	except getopt.error:
 		print 'unrecognized option!'
@@ -80,7 +77,7 @@ def processargs():
 			lines = opt[1]
 		if opt[0] == '-f' or opt[0] == '--follow':
 			follow = 1
-		elif opt[0] == '-?' or opt[0] == '--help':
+		elif opt[0] == '-?' or opt[0] == '-h' or opt[0] == '--help':
 			usage()
 			sys.exit(1)
 	if lines == None:
@@ -96,18 +93,23 @@ def processargs():
 
 # prints a usage message.
 def usage():
-	print 'usage: '+sys.argv[0]+' [option]... [<filename>]'
-	print '  -?, --help       print this usage info and exit'
-	print '  -f, --follow     output appended data as the file grows'
-	print '  -n, --lines=N    output the last N lines, instead of the last 10'
+	global version_number
+	print 'mtail '+version_number+' by matt hellige (matt@immute.net)'
 	print
-	print 'if filename is ommitted or is -, standard input is used. this'
+	print 'usage: '+sys.argv[0]+' [option]... [<filename>]'
+	print '  -?,-h, --help      print this usage info and exit'
+	print '     -f, --follow    output appended data as the file grows'
+	print '     -n, --lines=N   output the last N lines, instead of the last 10'
+	print
+	print 'if filename is ommitted or is -, standard input is used, -f is'
+	print 'automatically set, and -n is ignored (if specified). this'
 	print 'version does not support the tailing of multiple files.'
 	print
-	print 'this utility does not support arguments of the form -N as synonyms'
+	print 'this version does not support arguments of the form -N as synonyms'
 	print 'for -nN, nor does it support -n +N (or --lines +N). -f always'
 	print 'follows a particular file descriptor rather than a file name, i.e.'
-	print 'i do not support the --follow=name behavior of gnu tail.'
+	print 'this version does not support the --follow=name behavior of gnu'
+	print 'tail.'
 	print
 
 # colorizes a line, returning a string suitable for printing to a 
