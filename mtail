@@ -32,7 +32,7 @@ if os.environ.has_key('HOME'):
 else:
     config_file = None
 # version number
-version_number = "0.9.2"
+version_number = "1.0.0"
 
 # calls processargs(), sets up the tailer and then loops.
 def main():

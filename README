@@ -1,16 +1,18 @@
-mtail-0.9.2
+mtail-1.0.0
 
 by matt hellige (matt@immute.net)
 
 this is a file tailer with color support, written in python. it has a
-modest home page at 'http://matt.immute.net/src/mtail'. this README will
-be expanded in future versions. there is guaranteed to be at least one 
-more version: i will do a 1.0 release when i'm satisfied that it is 
-bug free. it seems fairly good to me now, but i'd like to bang on it 
-a little more. there are a few other features i'd like to add, but i'm
-not planning on going overboard: i believe in small tools for small jobs.
+modest home page at 'http://matt.immute.net/src/mtail'.
 
-i've used it with a few patchlevels/builds of python 1.5. i'm not sure if 
+this is the 1.0 release. i have not seen any bugs since i released 0.9.2, and i
+have heard no negative feedback. of course, this does not mean the tool is
+perfect, but it seems stable enough to warrant a 1.0 release.  this README will
+be expanded in future versions, and there are a few other features i'd like to
+add, but i'm not planning on going overboard: i believe in small tools for
+small jobs.
+
+i've used mtail with a few patchlevels/builds of python 1.5. i'm not sure if 
 it'll work with 1.6 or 2.0, but i'd like to find out, so please let me know 
 if you try it. also, of course, please let me know if you find bugs, fix
 bugs, or make any other improvements, and there's a good chance they'll
