@@ -34,21 +34,24 @@ if os.environ.has_key('HOME'):
 else:
     config_file = None
 # version number
-version_number = "1.1.0"
+version_number = "1.1.1"
 
 # stuff to make sure that we print banners correctly when tailing multiple
 # files. we need to lock around the printing of each line to guarantee that
 # each line gets a banner when necessary.
 lock = threading.Lock()
+event = threading.Event()
 last_filename = None
 multiple = 0
 verbose = 0
 silent = 0
+active = 0
 
 # sets up the interrupt handler, calls processargs(), sets up and starts the
 # tailers.
 def main():
     global multiple
+    global active
     print
     signal.signal(signal.SIGINT, handleInterrupt)
     initial_lines, filenames, follow = processargs()
@@ -57,27 +60,43 @@ def main():
     if len(filenames) > 1:
         multiple = 1
     for filename in filenames:
+        lock.acquire()
+        active = active + 1
         TailerThread(initial_lines, filename, follow, config).start()
+        lock.release()
+    while 1:
+        # it seems that there just needs to be some number here, or it ignores
+        # signals. PYTHON BUG!
+        event.wait(10000)
+        if event.isSet():
+            sys.exit(0)
 
 # signal handler for keyboard interrupts... just exits.
 def handleInterrupt(num, frame):
-    pass
+    sys.exit(0)
 
 # a simple thread that gets a config for a filename, initializes a tailer,
 # and loops.
 class TailerThread(threading.Thread):
     def __init__(self, initial_lines, filename, follow, config):
         threading.Thread.__init__(self)
+        self.setDaemon(1)
         self.initial_lines = initial_lines
         self.filename = filename
         self.follow = follow
         self.config = config
     
     def run(self):
+        global active
         try:
             self.do_run()
         except Exception:
             pass
+        lock.acquire()
+        active = active - 1
+        if active == 0:
+            event.set()
+        lock.release()
 
     def do_run(self):
         global last_filename

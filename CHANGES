@@ -1,3 +1,7 @@
+mtail 1.1.1:
+  * changed threading/signal handling code to accommodate changes in
+    python 2.0 (thanks to joseph grossberg for the bug report).
+
 mtail 1.1.0:
   * added support for tailing multiple files.
   * added -v and -q options (and long versions) related to filename banner
