@@ -16,7 +16,7 @@
 #     needs changing, rather than around every single character.
 #   - by virtue of being written in python, it is less platform-dependent.
 #   - i support pre-coloring filters.
-# share and enjoy!
+# please see the file LICENSE for copyright info, etc... share and enjoy!
 
 import getopt
 import string
