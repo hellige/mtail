@@ -49,11 +49,13 @@ def main():
 		tailer = sys.stdin
 	while 1:
 		line = tailer.readline()
-		if line is None:
+		if not line:
 			break
+		if line[len(line)-1] == '\n':
+			line = line[:len(line)-1]
 		line = filter(line)
 		try:
-			line = colorize(ansi, colors, string.rstrip(line))
+			line = colorize(ansi, colors, line)
 		except Exception:
 			print ansi['reset']
 		print line
@@ -188,7 +190,7 @@ class TailFile:
 			else:
 				self.readbuf = self.readbuf + self.file.read(n)
 				index = string.find(self.readbuf, '\n')
-		line = self.readbuf[:index]
+		line = self.readbuf[:index+1]
 		self.readbuf = self.readbuf[index+1:]
 		return line
 
