@@ -34,7 +34,7 @@ if os.environ.has_key('HOME'):
 else:
     config_file = None
 # version number
-version_number = "1.1.1"
+version_number = "1.2.0"
 
 # stuff to make sure that we print banners correctly when tailing multiple
 # files. we need to lock around the printing of each line to guarantee that
@@ -46,6 +46,7 @@ multiple = 0
 verbose = 0
 silent = 0
 active = 0
+tty_only = 0
 
 # sets up the interrupt handler, calls processargs(), sets up and starts the
 # tailers.
@@ -112,6 +113,12 @@ class TailerThread(threading.Thread):
             self.filename = 'standard input'
             ansi, colors, filter = self.config.getstdinconfig()
             tailer = sys.stdin
+
+        if tty_only and not sys.stdout.isatty():
+            docolor = lambda ansi, colors, line: line
+        else:
+            docolor = colorize
+
         while 1:
             line = tailer.readline()
             if not line:
@@ -125,8 +132,8 @@ class TailerThread(threading.Thread):
                         and last_filename != self.filename:
                     last_filename = self.filename
                     print
-                    print colorize(ansi, colors, '==> %s <==' % self.filename)
-                print colorize(ansi, colors, line)
+                    print docolor(ansi, colors, '==> %s <==' % self.filename)
+                print docolor(ansi, colors, line)
             except Exception:
                 print ansi['reset']
                 sys.exit(1)
@@ -138,12 +145,13 @@ def processargs():
     global verbose
     global silent
     global config_file
+    global tty_only
     filenames = []
     lines = None
     follow = 0
     try:
         opts, pargs = getopt.getopt(sys.argv[1:], 'fn:?hvq', ["follow",
-            "lines=", "help", "verbose", "quiet", "silent", "config="])
+            "lines=", "help", "verbose", "quiet", "silent", "config=", "tty"])
     except getopt.error:
         print 'unrecognized option!'
         print
@@ -161,6 +169,8 @@ def processargs():
             verbose = 1
         elif opt[0] in ['-q', '--quiet', '--silent']:
             silent = 1
+        elif opt[0] in ['--tty']:
+            tty_only = 1
         elif opt[0] in ['--config']:
             config_file = opt[1]
     if lines == None:
@@ -186,11 +196,13 @@ def usage():
     print '      -v, --verbose          always output headers giving file names'
     print '      -q, --quiet, --silent  never output headers giving file names'
     print '      --config=FILE          use config file FILE instead of ~/.mtailrc'
+    print '      --tty                  only perform coloring when standard output is'
+    print '                             connected to a terminal (tty)'
     print
     print 'with more than one filename, mtail will precede each chunk from'
     print 'each with a header giving the file name. if no filenames are given'
     print 'or a filename is -, standard input is used, -f is automatically'
-    print 'set, and -n is ignored (if specified).'
+    print 'set, and -n is ignored.'
     print
     print 'this version does not support arguments of the form -N as synonyms'
     print 'for -nN, nor does it support -n +N (or --lines +N). -f always'
@@ -317,7 +329,7 @@ class TailFile:
         return end - self.file.tell()
 
 # this class provides an abstraction of the mtail config file. it knows
-# how to read and parse a config file (view loadconfig()), and return the 
+# how to read and parse a config file (via loadconfig()), and return the 
 # appropriate configuration to use for a given filename (via getconfig())
 # and for stdin (via getstdinconfig()).
 #
