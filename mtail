@@ -29,7 +29,7 @@ import os
 # config file location. this should be made platform-independent...
 config_file = os.environ['HOME']+os.sep+'.mtailrc'
 # version number
-version_number = "0.9.0"
+version_number = "0.9.1"
 
 # calls processargs(), sets up the tailer and then loops.
 def main():
