@@ -2,35 +2,45 @@
 #
 # matt hellige (matt@immute.net)
 #
-# the format of this config file is pretty straightforward. comments must be 
-# on their own line. whitespace (apart from newlines) is ignored.
-# all regexps in this sample file use '/' as the separator, but any 
-# non-whitespace and non-alphanumeric character will do... to embed the 
-# separator in the regexp, escape it with a backslash. apart from that,
-# regular expressions are as in python.
+# the format of this config file is pretty straightforward, and pretty concise.
+# this sample is long and ugly only because it is copiously commented. comments
+# must be on their own line. whitespace (apart from newlines) is ignored.  all
+# regexps in this sample file use '/' as the separator, but any non-whitespace
+# and non-alphanumeric character will do... to embed the separator in the
+# regexp, escape it with a backslash. apart from that, regular expressions are
+# as in python.
+#
+# the file consists of zero or more 'files:' blocks interleaved with zero or
+# more 'ansi:' blocks. order of 'files:' blocks is important (first block with
+# a matching regexp is used) while order of 'ansi:' blocks is irrelevant: they
+# are treated as if they were defined as one at the top of the file.
 
-# a whitespace-separated list of file regexps to match this config. of course,
-# you could put all the regexps in one and separate them with |, but this
-# syntax is a little more pleasant, and i combine them anyway as i read the
-# file. the token "stdin" is special and indicates that this config may
-# be used to color standard input. it is not a regexp, and regexps that match
-# stdin (e.g., /stdin.*/) will not cause a config to be used for standard input.
-# the token "default" is treated similarly, but causes that config to be used
-# when no other config matches (see below).
+# the 'files:' directive indicates the start of a new 'files:' block. it must
+# be followed by a whitespace-separated list of file regexps to match this
+# config. of course, you could put all the regexps in one and separate them
+# with |, but this syntax is a little more pleasant, and i combine them anyway
+# as i read the file. the token "stdin" is special and indicates that this
+# config may  be used to color standard input. it is not a regexp, and regexps
+# that match stdin (e.g., /stdin.*/) will not cause a config to be used for
+# standard input.  the token "default" is treated similarly, but causes that
+# config to be used when no other config matches (see below).
 files: stdin /stdout\.log/
-   # regexps to use for pre-color filtering. they are applied in order, so
-   # bear in mind that later regexps are applied to the output of earlier ones.
-   # the second part is substituted for the first part. you can use \1, \2, and
-   # so on to refer to groups.
+   # an optional block of regexps to use for pre-color filtering. they are 
+   # applied in order, so bear in mind that later regexps are applied to the 
+   # output of earlier ones. the second part is substituted for the first 
+   # part. you can use \1, \2, and so on to refer to groups.
    filters:
       /continuum/c0nTiNuUm/
-   # the regexps and associated colors. they are matched in order, with
-   # later matches coloring over earlier ones. expressions should have 0 or
-   # 1 groups... if an expression has zero groups, the whole match is colored,
-   # if it has one group, only the portion of the line matching the group is 
-   # colored. this is a very simple-minded coloring system, and should probably
-   # be improved.
+   # an optional block of regexps and associated colors. they are matched in 
+   # order, with later matches coloring over earlier ones. expressions should 
+   # have 0 or 1 groups... if an expression has zero groups, the whole match 
+   # is colored, if it has one group, only the portion of the line matching 
+   # the group is colored. this is a very simple-minded coloring system, and 
+   # should probably be improved.
    # an unrecognized color name causes that line to be ignored.
+   # built-in color names are: black, red, green, yellow, blue, magenta, cyan,
+   #    white, brightblack, brightred, brightgreen, brightyellow, brightblue,
+   #    brightmagenta, and brightcyan.
    colors:
       /^.*$/             blue
       /^[a-z]+:([^:]+):/ brightblue
@@ -40,7 +50,8 @@ files: stdin /stdout\.log/
       /^error.*/         brightred
       /^(error).*/       brightredblink
 
-# a simple config to use for everything not covered above.
+# a simple config to use for everything not covered above. if no default
+# config is given, the default defaults to empty (no colors, no filters).
 files: default
    colors:
       /^.*$/             brightblack
