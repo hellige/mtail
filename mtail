@@ -25,6 +25,8 @@ import re
 import sys
 import stat
 import os
+import threading
+import signal
 
 # config file location. this should be made platform-independent...
 if os.environ.has_key('HOME'):
@@ -32,84 +34,139 @@ if os.environ.has_key('HOME'):
 else:
     config_file = None
 # version number
-version_number = "1.0.0"
+version_number = "1.1.0"
 
-# calls processargs(), sets up the tailer and then loops.
+# stuff to make sure that we print banners correctly when tailing multiple
+# files. we need to lock around the printing of each line to guarantee that
+# each line gets a banner when necessary.
+lock = threading.Lock()
+last_filename = None
+multiple = 0
+verbose = 0
+silent = 0
+
+# sets up the interrupt handler, calls processargs(), sets up and starts the
+# tailers.
 def main():
+    global multiple
     print
-    initial_lines, filename, follow = processargs()
-    config = ConfigFile(config_file)
-    config.loadconfig()
-    if filename != None:
-        ansi, colors, filter = config.getconfig(filename[string.rfind(filename, 
-            os.sep)+1:])
-        tailer = TailFile(filename, follow)
-        tailer.seek_lines(initial_lines)
-    else:
-        print '*** reading stdin, will just follow...'
-        print
-        ansi, colors, filter = config.getstdinconfig()
-        tailer = sys.stdin
-    while 1:
-        line = tailer.readline()
-        if not line:
-            break
-        if line[len(line)-1] == '\n':
-            line = line[:len(line)-1]
-        line = filter(line)
+    signal.signal(signal.SIGINT, handleInterrupt)
+    initial_lines, filenames, follow = processargs()
+    if len(filenames) > 1:
+        multiple = 1
+    for filename in filenames:
+        TailerThread(initial_lines, filename, follow).start()
+
+# signal handler for keyboard interrupts... just exits.
+def handleInterrupt(num, frame):
+    pass
+
+# a simple thread that gets a config for a filename, initializes a tailer,
+# and loops.
+class TailerThread(threading.Thread):
+    def __init__(self, initial_lines, filename, follow):
+        threading.Thread.__init__(self)
+        self.initial_lines = initial_lines
+        self.filename = filename
+        self.follow = follow
+    
+    def run(self):
         try:
-            line = colorize(ansi, colors, line)
+            self.do_run()
         except Exception:
-            print ansi['reset']
-            sys.exit(1)
-        print line
-        sys.stdout.flush()
+            pass
+
+    def do_run(self):
+        global last_filename
+        config = ConfigFile(config_file)
+        config.loadconfig()
+        if self.filename != None:
+            ansi, colors, filter = config.getconfig(self.filename[string\
+                .rfind(self.filename, os.sep)+1:])
+            tailer = TailFile(self.filename, self.follow)
+            tailer.seek_lines(self.initial_lines)
+        else:
+            if not multiple and not silent:
+                print '*** reading stdin, will just follow...'
+                print
+            self.filename = 'standard input'
+            ansi, colors, filter = config.getstdinconfig()
+            tailer = sys.stdin
+        while 1:
+            line = tailer.readline()
+            if not line:
+                break
+            if line[len(line)-1] == '\n':
+                line = line[:len(line)-1]
+            line = filter(line)
+            lock.acquire()
+            try:
+                if (multiple or verbose) and (not silent) \
+                        and last_filename != self.filename:
+                    last_filename = self.filename
+                    print
+                    print colorize(ansi, colors, '==> %s <==' % self.filename)
+                print colorize(ansi, colors, line)
+            except Exception:
+                print ansi['reset']
+                sys.exit(1)
+            sys.stdout.flush()
+            lock.release()
 
 # processes the command line arguments.
 def processargs():
-    filename = None
+    global verbose
+    global silent
+    filenames = []
     lines = None
     follow = 0
     try:
-        opts, pargs = getopt.getopt(sys.argv[1:], 'fn:?h', 
-            ["follow", "lines=", "help"])
+        opts, pargs = getopt.getopt(sys.argv[1:], 'fn:?hvq', 
+            ["follow", "lines=", "help", "verbose", "quiet", "silent"])
     except getopt.error:
         print 'unrecognized option!'
         print
         usage()
         sys.exit(1)
     for opt in opts:
-        if opt[0] == '-n' or opt[0] == '--lines':
+        if opt[0] in ['-n', '--lines']:
             lines = opt[1]
-        if opt[0] == '-f' or opt[0] == '--follow':
+        elif opt[0] in ['-f', '--follow']:
             follow = 1
-        elif opt[0] == '-?' or opt[0] == '-h' or opt[0] == '--help':
+        elif opt[0] in ['-?', '-h', '--help']:
             usage()
             sys.exit(1)
+        elif opt[0] in ['-v', '--verbose']:
+            verbose = 1
+        elif opt[0] in ['-q', '--quiet', '--silent']:
+            silent = 1
     if lines == None:
         lines = 10
-    if len(pargs) > 1:
-        print 'multiple files are not supported. sorry...'
-        print
-        usage()
-        sys.exit(1)
-    elif len(pargs) == 1 and pargs[0] != '-':
-        filename = pargs[0]
-    return (int(lines), filename, follow)
+    for filename in pargs:
+        if filename == '-':
+            filenames.append(None)
+        else:
+            filenames.append(filename)
+    if len(filenames) == 0:
+        filenames.append(None)
+    return (int(lines), filenames, follow)
 
 # prints a usage message.
 def usage():
     global version_number
     print 'mtail '+version_number+' by matt hellige (matt@immute.net)'
     print
-    print 'usage: '+sys.argv[0]+' [option]... [<filename>]'
-    print '  -?,-h, --help      print this usage info and exit'
-    print '     -f, --follow    output appended data as the file grows'
-    print '     -n, --lines=N   output the last N lines, instead of the last 10'
+    print 'usage: '+sys.argv[0]+' [option]... [<filename>]...'
+    print '  -?, -h, --help             print this usage info and exit'
+    print '      -f, --follow           output appended data as the file grows'
+    print '      -n, --lines=N          output the last N lines, instead of the last 10'
+    print '      -v, --verbose          always output headers giving file names'
+    print '      -q, --quiet, --silent  never output headers giving file names'
     print
-    print 'if filename is ommitted or is -, standard input is used, -f is'
-    print 'automatically set, and -n is ignored (if specified). this'
-    print 'version does not support the tailing of multiple files.'
+    print 'with more than one filename, mtail will precede each chunk from'
+    print 'each with a header giving the file name. if no filenames are given'
+    print 'or a filename is -, standard input is used, -f is automatically'
+    print 'set, and -n is ignored (if specified).'
     print
     print 'this version does not support arguments of the form -N as synonyms'
     print 'for -nN, nor does it support -n +N (or --lines +N). -f always'
@@ -185,7 +242,10 @@ class TailFile:
     def readline(self):
         index = string.find(self.readbuf, '\n')
         while index == -1:
-            n = self.more_to_read()
+            try:
+                n = self.more_to_read()
+            except Exception:
+                return None
             if n == 0:
                 if self.follow:
                     time.sleep(1)
@@ -482,7 +542,4 @@ class ConfigFile:
             reduce(lambda y, z, f=f: z[0].sub(z[1],y), f, x))
 
 # now we'll call main()...
-try:
-    main()
-except Exception:
-    pass
+main()
