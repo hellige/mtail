@@ -3,6 +3,8 @@
 # file tailer/colorer.
 #
 # by matt hellige (matt@immute.net)
+
+# http://matt.immute.net/src/mtail
 #
 # this utility is derived in part from colortail-0.3.0 by joakim andersson 
 # (pt98jan@student.hk-r.se). it is an improvement on that work in several
