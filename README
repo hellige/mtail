@@ -15,11 +15,11 @@ mtail now requires thread support from python. please let me know if this
 is inconvenient and i can add support for a single-file, non-threaded 
 mode.
 
-i've used mtail with a few patchlevels/builds of python 1.5. i'm not sure if 
-it'll work with 1.6 or 2.0, but i'd like to find out, so please let me know 
-if you try it. also, of course, please let me know if you find bugs, fix
-bugs, or make any other improvements, and there's a good chance they'll
-end up in a future release (with acknowledgements, of course).
+i've used mtail with a few patchlevels/builds of python 1.5--2.1.  there may
+still be issues with particular versions or builds, so please let me know i
+you think you've found something. also, of course, please let me know if you
+find bugs, fix bugs, or make any other improvements, and there's a good chance
+they'll end up in a future release (with acknowledgements, of course).
 
 please see the usage ("mtail -?") for details. the config file format is
 described in mtailrc.sample, which you should copy to ~/.mtailrc (on 
