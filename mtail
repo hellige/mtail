@@ -7,7 +7,7 @@
 # this utility is derived in part from colortail-0.3.0 by joakim andersson 
 # (pt98jan@student.hk-r.se). it is an improvement on that work in several
 # areas:
-#   - it is roughly 400 lines of code, rather than roughly 3500.
+#   - it is roughly 500 lines of code, rather than roughly 3500.
 #   - it does not dump core when it encounters long lines.
 #   - the regexp matching process is simpler and, in my opinion, more intuitive.
 #   - there is only one config file, which contains coloring rules for an 
