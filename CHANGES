@@ -1,5 +1,7 @@
 mtail 1.1.0:
   * added support for tailing multiple files.
+  * added -v and -q options (and long versions) related to filename banner
+    printing.
   * very minor bugfixes.
 
 mtail 1.0.0:
