@@ -3,6 +3,7 @@ mtail 1.1.0:
   * added -v and -q options (and long versions) related to filename banner
     printing.
   * very minor bugfixes.
+  * added --config option to explicitly specify config file.
 
 mtail 1.0.0:
   * nothing but minor README updates.

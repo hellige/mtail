@@ -52,10 +52,12 @@ def main():
     print
     signal.signal(signal.SIGINT, handleInterrupt)
     initial_lines, filenames, follow = processargs()
+    config = ConfigFile(config_file)
+    config.loadconfig()
     if len(filenames) > 1:
         multiple = 1
     for filename in filenames:
-        TailerThread(initial_lines, filename, follow).start()
+        TailerThread(initial_lines, filename, follow, config).start()
 
 # signal handler for keyboard interrupts... just exits.
 def handleInterrupt(num, frame):
@@ -64,11 +66,12 @@ def handleInterrupt(num, frame):
 # a simple thread that gets a config for a filename, initializes a tailer,
 # and loops.
 class TailerThread(threading.Thread):
-    def __init__(self, initial_lines, filename, follow):
+    def __init__(self, initial_lines, filename, follow, config):
         threading.Thread.__init__(self)
         self.initial_lines = initial_lines
         self.filename = filename
         self.follow = follow
+        self.config = config
     
     def run(self):
         try:
@@ -78,10 +81,8 @@ class TailerThread(threading.Thread):
 
     def do_run(self):
         global last_filename
-        config = ConfigFile(config_file)
-        config.loadconfig()
         if self.filename != None:
-            ansi, colors, filter = config.getconfig(self.filename[string\
+            ansi, colors, filter = self.config.getconfig(self.filename[string\
                 .rfind(self.filename, os.sep)+1:])
             tailer = TailFile(self.filename, self.follow)
             tailer.seek_lines(self.initial_lines)
@@ -90,7 +91,7 @@ class TailerThread(threading.Thread):
                 print '*** reading stdin, will just follow...'
                 print
             self.filename = 'standard input'
-            ansi, colors, filter = config.getstdinconfig()
+            ansi, colors, filter = self.config.getstdinconfig()
             tailer = sys.stdin
         while 1:
             line = tailer.readline()
@@ -117,12 +118,13 @@ class TailerThread(threading.Thread):
 def processargs():
     global verbose
     global silent
+    global config_file
     filenames = []
     lines = None
     follow = 0
     try:
-        opts, pargs = getopt.getopt(sys.argv[1:], 'fn:?hvq', 
-            ["follow", "lines=", "help", "verbose", "quiet", "silent"])
+        opts, pargs = getopt.getopt(sys.argv[1:], 'fn:?hvq', ["follow",
+            "lines=", "help", "verbose", "quiet", "silent", "config="])
     except getopt.error:
         print 'unrecognized option!'
         print
@@ -140,6 +142,8 @@ def processargs():
             verbose = 1
         elif opt[0] in ['-q', '--quiet', '--silent']:
             silent = 1
+        elif opt[0] in ['--config']:
+            config_file = opt[1]
     if lines == None:
         lines = 10
     for filename in pargs:
@@ -162,6 +166,7 @@ def usage():
     print '      -n, --lines=N          output the last N lines, instead of the last 10'
     print '      -v, --verbose          always output headers giving file names'
     print '      -q, --quiet, --silent  never output headers giving file names'
+    print '      --config=FILE          use config file FILE instead of ~/.mtailrc'
     print
     print 'with more than one filename, mtail will precede each chunk from'
     print 'each with a header giving the file name. if no filenames are given'
