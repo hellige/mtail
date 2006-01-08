@@ -131,7 +131,7 @@ class TailerThread(threading.Thread):
                 line = line[:len(line)-1]
             line = filter(line)
             if line is None:
-                break
+                continue
             lock.acquire()
             try:
                 if (multiple or verbose) and (not silent) \
@@ -393,6 +393,24 @@ class ConfigFile:
     # and make them the default...
     ansi = defaultansi.copy()
 
+    class SubstitutionFilter:
+        def __init__(self, regex, subst):
+            self.regex = regex
+            self.subst = subst
+
+        def filter(self, line):
+            return (line[0], re.sub(regex, subst, line[1]))
+            
+    class AllowDenyFilter:
+        def __init__(self, regex, allow):
+            self.allow = allow
+            self.regex = regex
+
+        def filter(self, line):
+            if (line[0] != self.allow and self.regex.search(line[1])):
+                return (self.allow, line[1])
+            return line
+
     # create a new ConfigFile representation with the given filename.
     def __init__(self, filename):
         self.filename = filename
@@ -501,9 +519,31 @@ class ConfigFile:
                             config['colors'].append((re.compile(rexp), color))
                         elif mode == 'filters':
                             if string.find(line, 'deny') == 0:
-                                print "dropping"
+                                line = string.strip(line[4:])
+                                sep = line[0]
+                                if (string.find(string.digits, sep) != -1 or 
+                                        string.find(string.letters, sep) != -1):
+                                    raise ConfigException("invalid regexp marker")
+                                reend = string.index(line, sep, 1)
+                                if reend == -1:
+                                    raise ConfigException("missing regexp end marker")
+                                rexp = line[1:reend]
+                                rexp = string.replace(rexp, '\\'+sep, sep)
+                                config['filters'].append(\
+                                    self.AllowDenyFilter(re.compile(rexp), 0))
                             elif string.find(line, 'allow') == 0:
-                                print "allowing"
+                                line = string.strip(line[5:])
+                                sep = line[0]
+                                if (string.find(string.digits, sep) != -1 or 
+                                        string.find(string.letters, sep) != -1):
+                                    raise ConfigException("invalid regexp marker")
+                                reend = string.index(line, sep, 1)
+                                if reend == -1:
+                                    raise ConfigException("missing regexp end marker")
+                                rexp = line[1:reend]
+                                rexp = string.replace(rexp, '\\'+sep, sep)
+                                config['filters'].append(\
+                                    self.AllowDenyFilter(re.compile(rexp), 1))
                             else:
                                 sep = line[0]
                                 if (string.find(string.digits, sep) != -1 or 
@@ -519,7 +559,9 @@ class ConfigFile:
                                     raise ConfigException("missing final filter marker")
                                 repl = line[subend+1:replend]
                                 repl = string.replace(repl, '\\'+sep, sep)
-                                config['filters'].append((re.compile(sub), repl))
+                                config['filters'].append(\
+                                    self.SubstitutionFilter(re.compile(sub), \
+                                    repl))
                         elif mode == 'ansi':
                             sep = line[0]
                             if (string.find(string.digits, sep) != -1 or 
@@ -568,9 +610,13 @@ class ConfigFile:
     # get the config to use when coloring stdin
     def getstdinconfig(self):
         def filter_line(line):
+            line = (1, line)
             for filter in self.stdinconfig['filters']:
-                line = re.sub(filter[0], filter[1], line)
-            return line
+                line = filter.filter(line)
+            if line[0]:
+                return line[1]
+            else:
+                return None
         return (self.ansi, self.stdinconfig['colors'], filter_line)
 
     # get the config to use when coloring the file filename. filename should
@@ -584,9 +630,13 @@ class ConfigFile:
                 filters = config['filters']
                 break
         def filter_line(line):
+            line = (1, line)
             for filter in filters:
-                line = re.sub(filter[0], filter[1], line)
-            return line
+                line = filter.filter(line)
+            if line[0]:
+                return line[1]
+            else:
+                return None
         return (self.ansi, colors, filter_line)
 
 # jython doesn't provide os.access, so we'll define it here.
