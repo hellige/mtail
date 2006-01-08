@@ -58,7 +58,6 @@ tty_only = 0
 def main():
     global multiple
     global active
-    print
     if signal:
         signal.signal(signal.SIGINT, handleInterrupt)
     initial_lines, filenames, follow = processargs()
@@ -97,7 +96,7 @@ class TailerThread(threading.Thread):
         global active
         try:
             self.do_run()
-        except Exception:
+        except Exception, e:
             pass
         lock.acquire()
         active = active - 1
@@ -114,8 +113,7 @@ class TailerThread(threading.Thread):
             tailer.seek_lines(self.initial_lines)
         else:
             if not multiple and not silent:
-                print '*** reading stdin, will just follow...'
-                print
+                print >>sys.stderr, '*** reading stdin, will just follow...'
             self.filename = 'standard input'
             ansi, colors, filter = self.config.getstdinconfig()
             tailer = sys.stdin
@@ -159,8 +157,8 @@ def processargs():
         opts, pargs = getopt.getopt(sys.argv[1:], 'fn:?hvq', ["follow",
             "lines=", "help", "verbose", "quiet", "silent", "config=", "tty"])
     except getopt.error:
-        print 'unrecognized option!'
-        print
+        print >>sys.stderr, 'unrecognized option!'
+        print >>sys.stderr
         usage()
         sys.exit(1)
     for opt in opts:
@@ -179,12 +177,12 @@ def processargs():
             if hasattr(sys.stdout, 'isatty'):
                 tty_only = 1
             else:
-                print 'this platform does not provide tty detection. ignoring --tty...'
-                print
+                print >>sys.stderr, 'this platform does not provide tty detection. ignoring --tty...'
+                print >>sys.stderr
                 tty_only = 0
         elif opt[0] in ['--config']:
             config_file = opt[1]
-    if lines == None:
+    if lines is None:
         lines = 10
     for filename in pargs:
         if filename == '-':
@@ -198,29 +196,31 @@ def processargs():
 # prints a usage message.
 def usage():
     global version_number
-    print 'mtail '+version_number+' by matt hellige (matt@immute.net)'
-    print
-    print 'usage: '+sys.argv[0]+' [option]... [<filename>]...'
-    print '  -?, -h, --help             print this usage info and exit'
-    print '      -f, --follow           output appended data as the file grows'
-    print '      -n, --lines=N          output the last N lines, instead of the last 10'
-    print '      -v, --verbose          always output headers giving file names'
-    print '      -q, --quiet, --silent  never output headers giving file names'
-    print '      --config=FILE          use config file FILE instead of ~/.mtailrc'
-    print '      --tty                  only perform coloring when standard output is'
-    print '                             connected to a terminal (tty)'
-    print
-    print 'with more than one filename, mtail will precede each chunk from'
-    print 'each with a header giving the file name. if no filenames are given'
-    print 'or a filename is -, standard input is used, -f is automatically'
-    print 'set, and -n is ignored.'
-    print
-    print 'this version does not support arguments of the form -N as synonyms'
-    print 'for -nN, nor does it support -n +N (or --lines +N). -f always'
-    print 'follows a particular file descriptor rather than a file name, i.e.'
-    print 'this version does not support the --follow=name behavior of gnu'
-    print 'tail.'
-    print
+    print >>sys.stderr, '''
+mtail %s by matt hellige (matt@immute.net)
+
+usage: %s [option]... [<filename>]...
+  -?, -h, --help             print this usage info and exit
+      -f, --follow           output appended data as the file grows
+      -n, --lines=N          output the last N lines, instead of the last 10
+      -v, --verbose          always output headers giving file names
+      -q, --quiet, --silent  never output headers giving file names
+      --config=FILE          use config file FILE instead of ~/.mtailrc
+      --tty                  only perform coloring when standard output is
+                             connected to a terminal (tty)
+
+with more than one filename, mtail will precede each chunk from
+each with a header giving the file name. if no filenames are given
+or a filename is -, standard input is used, -f is automatically
+set, and -n is ignored.
+
+this version does not support arguments of the form -N as synonyms
+for -nN, nor does it support -n +N (or --lines +N). -f always
+follows a particular file descriptor rather than a file name, i.e.
+this version does not support the --follow=name behavior of gnu
+tail.
+
+''' % (version_number, sys.argv[0])
 
 # colorizes a line, returning a string suitable for printing to a 
 # terminal.
@@ -275,13 +275,14 @@ class TailFile:
     def __init__(self, filename, follow = 0):
         self.filename = filename
         if not os.path.exists(filename):
-            print "no such file: '"+filename+"'."
+            print >>sys.stderr, "no such file: '"+filename+"'."
             sys.exit(1)
         if os.path.isdir(filename):
-            print "file '"+filename+"' is a directory."
+            print >>sys.stderr, "file '"+filename+"' is a directory."
             sys.exit(1)
         if not os.access(filename, os.R_OK):
-            print "cannot read file '"+filename+"'. permission denied."
+            print >>sys.stderr, "cannot read file '" + filename \
+                + "'. permission denied."
             sys.exit(1)
         self.file = open(self.filename, 'r')
         self.follow = follow
@@ -299,7 +300,8 @@ class TailFile:
                 else:
                     return None
             else:
-                self.readbuf = self.readbuf + self.file.read(n)
+                # TODO: comment this...
+                self.readbuf = self.readbuf + self.file.read(int(n))
                 index = string.find(self.readbuf, '\n')
         line = self.readbuf[:index+1]
         self.readbuf = self.readbuf[index+1:]
@@ -313,16 +315,21 @@ class TailFile:
             return
         pos = self.file.tell()
         while pos != 0:
-            pos = pos - bufsize
+            pos -= bufsize
             if pos < 0:
-                bytestoread = bytestoread + pos
+                # jython gets confused about int/long between file.tell() and
+                # file.read(). truncating this to an in here should always 
+                # be safe, since our initial sizes are only 2048, and pos
+                # can only end up negative if the result of tell() is less
+                # than bufsize...
+                bytestoread += int(pos)
                 pos = 0
             self.file.seek(pos)
             buf = self.file.read(bytestoread)
             j = bytestoread-1
             while j >= 0:
                 if buf[j] == '\n':
-                    lines = lines - 1
+                    lines -= 1
                     if lines < 0:
                         self.file.seek(pos+j+1)
                         return
@@ -343,6 +350,7 @@ class TailFile:
 # how to read and parse a config file (via loadconfig()), and return the 
 # appropriate configuration to use for a given filename (via getconfig())
 # and for stdin (via getstdinconfig()).
+
 #
 # it's also pretty ugly... it might not be so bad if i hadn't written it at
 # three in the morning. 
@@ -353,30 +361,35 @@ class ConfigFile:
     configs = []
     # config for stdin
     stdinconfig = None
-    # default config
-    default = {
+    # default default config (since default can be overridden in the config,
+    # and we may need to recover our true default state...)
+    defaultdefault = {
         'colors': [],
         'filters': []
     }
+    # default config
+    default = defaultdefault.copy()
     # these are the default ansi escape sequences we use... 
-    ansi = {}
-    ansi["black"]         = "\033[0;30m"
-    ansi["red"]           = "\033[0;31m"                
-    ansi["green"]         = "\033[0;32m"
-    ansi["yellow"]        = "\033[0;33m"
-    ansi["blue"]          = "\033[0;34m"
-    ansi["magenta"]       = "\033[0;35m"
-    ansi["cyan"]          = "\033[0;36m"
-    ansi["white"]         = "\033[0;37m"
-    ansi["brightblack"]   = "\033[1;30m"
-    ansi["brightred"]     = "\033[1;31m"
-    ansi["brightgreen"]   = "\033[1;32m"
-    ansi["brightyellow"]  = "\033[1;33m"
-    ansi["brightblue"]    = "\033[1;34m"
-    ansi["brightmagenta"] = "\033[1;35m"
-    ansi["brightcyan"]    = "\033[1;36m"
-    ansi["brightwhite"]   = "\033[1;37m"
-    ansi["reset"]         = "\033[0m"
+    defaultansi = {}
+    defaultansi["black"]         = "\033[0;30m"
+    defaultansi["red"]           = "\033[0;31m"                
+    defaultansi["green"]         = "\033[0;32m"
+    defaultansi["yellow"]        = "\033[0;33m"
+    defaultansi["blue"]          = "\033[0;34m"
+    defaultansi["magenta"]       = "\033[0;35m"
+    defaultansi["cyan"]          = "\033[0;36m"
+    defaultansi["white"]         = "\033[0;37m"
+    defaultansi["brightblack"]   = "\033[1;30m"
+    defaultansi["brightred"]     = "\033[1;31m"
+    defaultansi["brightgreen"]   = "\033[1;32m"
+    defaultansi["brightyellow"]  = "\033[1;33m"
+    defaultansi["brightblue"]    = "\033[1;34m"
+    defaultansi["brightmagenta"] = "\033[1;35m"
+    defaultansi["brightcyan"]    = "\033[1;36m"
+    defaultansi["brightwhite"]   = "\033[1;37m"
+    defaultansi["reset"]         = "\033[0m"
+    # and make them the default...
+    ansi = defaultansi.copy()
 
     # create a new ConfigFile representation with the given filename.
     def __init__(self, filename):
@@ -384,11 +397,19 @@ class ConfigFile:
     
     # load all configs from the file, parse and store internally.
     def loadconfig(self):
-        if self.filename == None or not (os.path.exists(self.filename) 
+        if self.filename is None or not (os.path.exists(self.filename) 
                 and os.path.isfile(self.filename)
                 and os.access(self.filename, os.R_OK)):
             self.stdinconfig = self.default
+            self.configs = []
+            self.ansi = self.defaultansi.copy()
             return
+
+        # we'll use ConfigException to signal config errors while parsing.
+        # it won't be used outside of this method...
+        class ConfigException(Exception):
+            pass
+
         config = None
         mode = None
         stdin = 0
@@ -396,170 +417,139 @@ class ConfigFile:
         nonstdin = 0
         lineno = 0
         file = open(self.filename, "r")
-        for line in file.readlines():
-            lineno = lineno+1
-            line = string.strip(line)
-            if len(line) > 0 and line[0] != '#':
-                if string.find(line, "files:") == 0:
-                    if config is not None:
-                        if nonstdin:
-                            self.configs.append(config)
-                        if stdin and self.stdinconfig is None:
-                            self.stdinconfig = config
-                        if default:
-                            self.default = config
-                    stdin = 0
-                    nonstdin = 0
-                    default = 0
-                    filesre = None
-                    files = string.strip(line[6:])
-                    while len(files) > 0:
-                        if string.find(files, 'stdin') == 0:
-                            stdin = 1
-                            files = string.lstrip(files[5:])
-                        elif string.find(files, 'default') == 0:
-                            default = 1
-                            files = string.lstrip(files[7:])
-                        else:
-                            sep = files[0]
+        try:
+            for line in file.readlines():
+                lineno = lineno+1
+                line = string.strip(line)
+                if len(line) > 0 and line[0] != '#':
+                    if string.find(line, "files:") == 0:
+                        if config is not None:
+                            if nonstdin:
+                                self.configs.append(config)
+                            if stdin and self.stdinconfig is None:
+                                self.stdinconfig = config
+                            if default:
+                                self.default = config
+                        stdin = 0
+                        nonstdin = 0
+                        default = 0
+                        filesre = None
+                        files = string.strip(line[6:])
+                        while len(files) > 0:
+                            if string.find(files, 'stdin') == 0:
+                                stdin = 1
+                                files = string.lstrip(files[5:])
+                            elif string.find(files, 'default') == 0:
+                                default = 1
+                                files = string.lstrip(files[7:])
+                            else:
+                                sep = files[0]
+                                if (string.find(string.digits, sep) != -1 or 
+                                        string.find(string.letters, sep) != -1):
+                                    raise ConfigException("invalid regexp marker")
+                                reend = string.index(files, sep, 1)
+                                if reend == -1:
+                                    raise ConfigException("missing regexp end marker")
+                                rexp = files[1:reend]
+                                rexp = string.replace(rexp, '\\'+sep, sep)
+                                if filesre is None:
+                                    filesre = '('+rexp+')'
+                                else:
+                                    filesre = filesre+'|('+rexp+')'
+                                files = string.lstrip(files[reend+1:])
+                        config = {}
+                        if filesre is not None:
+                            nonstdin = 1
+                            config['files'] = re.compile(filesre)
+                        config['colors'] = []
+                        config['filters'] = []
+                        mode = None
+                    elif string.find(line, 'ansi:') == 0:
+                        if config is not None:
+                            if nonstdin:
+                                self.configs.append(config)
+                            if stdin and self.stdinconfig is None:
+                                self.stdinconfig = config
+                            if default:
+                                self.default = config
+                        mode = 'ansi'
+                        config = None
+                    elif string.find(line, 'colors:') == 0:
+                        if config is None:
+                            raise ConfigException("'colors:' found outside of 'files:' block")
+                        mode = 'colors'
+                    elif string.find(line, 'filters:') == 0:
+                        if config is None:
+                            raise ConfigException("'filters:' found outside of 'files:' block")
+                        mode = 'filters'
+                    else:
+                        if mode == 'colors':
+                            sep = line[0]
                             if (string.find(string.digits, sep) != -1 or 
                                     string.find(string.letters, sep) != -1):
-                                print "configuration error! invalid regexp marker at line " +`lineno`+ "."
-                                print "using no config!"
-                                self.configs = []
-                                return
-                            reend = string.index(files, sep, 1)
+                                raise ConfigException("invalid regexp marker")
+                            reend = string.index(line, sep, 1)
                             if reend == -1:
-                                print "configuration error! missing regexp end marker at line " +`lineno`+ "."
-                                print "using no config!"
-                                self.configs = []
-                                return
-                            rexp = files[1:reend]
+                                raise ConfigException("missing regexp end marker")
+                            rexp = line[1:reend]
                             rexp = string.replace(rexp, '\\'+sep, sep)
-                            if filesre is None:
-                                filesre = '('+rexp+')'
-                            else:
-                                filesre = filesre+'|('+rexp+')'
-                            files = string.lstrip(files[reend+1:])
-                    config = {}
-                    if filesre is not None:
-                        nonstdin = 1
-                        config['files'] = re.compile(filesre)
-                    config['colors'] = []
-                    config['filters'] = []
-                    mode = None
-                elif string.find(line, 'ansi:') == 0:
-                    if config is not None:
-                        if nonstdin:
-                            self.configs.append(config)
-                        if stdin and self.stdinconfig is None:
-                            self.stdinconfig = config
-                        if default:
-                            self.default = config
-                    mode = 'ansi'
-                    config = None
-                elif string.find(line, 'colors:') == 0:
-                    if config is None:
-                        print "configuration error! 'colors:' found outside of 'files:' block at line " +`lineno`+ "."
-                        print "using no config!"
-                        return
-                    mode = 'colors'
-                elif string.find(line, 'filters:') == 0:
-                    if config is None:
-                        print "configuration error! 'filters:' found outside of 'files:' block at line " +`lineno`+ "."
-                        print "using no config!"
-                        self.configs = []
-                        return
-                    mode = 'filters'
-                else:
-                    if mode == 'colors':
-                        sep = line[0]
-                        if (string.find(string.digits, sep) != -1 or 
-                                string.find(string.letters, sep) != -1):
-                            print "configuration error! invalid regexp marker at line " +`lineno`+ "."
-                            print "using no config!"
-                            self.configs = []
-                            return
-                        reend = string.index(line, sep, 1)
-                        if reend == -1:
-                            print "configuration error! missing regexp end marker at line " +`lineno`+ "."
-                            print "using no config!"
-                            self.configs = []
-                            return
-                        rexp = line[1:reend]
-                        rexp = string.replace(rexp, '\\'+sep, sep)
-                        color = string.strip(line[reend+1:])
-                        if len(color)==0:
-                            print "configuration error! missing color at line " +`lineno`+ "."
-                            print "using no config!"
-                            self.configs = []
-                            return
-                        config['colors'].append((re.compile(rexp), color))
-                    elif mode == 'filters':
-                        sep = line[0]
-                        if (string.find(string.digits, sep) != -1 or 
-                                string.find(string.letters, sep) != -1):
-                            print "configuration error! invalid regexp marker at line " +`lineno`+ "."
-                            print "using no config!"
-                            self.configs = []
-                            return
-                        subend = string.index(line, sep, 1)
-                        if subend == -1:
-                            print "configuration error! missing second filter marker at line " +`lineno`+ "."
-                            print "using no config!"
-                            self.configs = []
-                            return
-                        sub = line[1:subend]
-                        sub = string.replace(sub, '\\'+sep, sep)
-                        replend = string.index(line, sep, subend+1)
-                        if subend == -1:
-                            print "configuration error! missing final filter marker at line " +`lineno`+ "."
-                            print "using no config!"
-                            self.configs = []
-                            return
-                        repl = line[subend+1:replend]
-                        repl = string.replace(repl, '\\'+sep, sep)
-                        config['filters'].append((re.compile(sub), repl))
-                    elif mode == 'ansi':
-                        sep = line[0]
-                        if (string.find(string.digits, sep) != -1 or 
-                                string.find(string.letters, sep) != -1):
-                            print "configuration error! invalid regexp marker at line " +`lineno`+ "."
-                            print "using no config!"
-                            self.configs = []
-                            return
-                        nameend = string.index(line, sep, 1)
-                        if nameend == -1:
-                            print "configuration error! missing second ansi marker at line " +`lineno`+ "."
-                            print "using no config!"
-                            self.configs = []
-                            return
-                        name = line[1:nameend]
-                        name = string.replace(name, '\\'+sep, sep)
-                        seqend = string.index(line, sep, nameend+1)
-                        if seqend == -1:
-                            print "configuration error! missing final ansi marker at line " +`lineno`+ "."
-                            print "using no config!"
-                            self.configs = []
-                            return
-                        seq = line[nameend+1:seqend]
-                        seq = string.replace(seq, '\\'+sep, sep)
-                        self.ansi[name] = seq
-                    else:
-                        print "configuration error! this line doesn't belong here! at line " +`lineno`+ "."
-                        print "using no config!"
-                        self.configs = []
-                        return
-        if config is not None:
-            if nonstdin:
-                self.configs.append(config)
-            if stdin and self.stdinconfig is None:
-                self.stdinconfig = config
-            if default:
-                self.default = config
-        if self.stdinconfig is None:
+                            color = string.strip(line[reend+1:])
+                            if len(color)==0:
+                                raise ConfigException("missing color")
+                            config['colors'].append((re.compile(rexp), color))
+                        elif mode == 'filters':
+                            sep = line[0]
+                            if (string.find(string.digits, sep) != -1 or 
+                                    string.find(string.letters, sep) != -1):
+                                raise ConfigException("invalid regexp marker")
+                            subend = string.index(line, sep, 1)
+                            if subend == -1:
+                                raise ConfigException("missing second filter marker")
+                            sub = line[1:subend]
+                            sub = string.replace(sub, '\\'+sep, sep)
+                            replend = string.index(line, sep, subend+1)
+                            if subend == -1:
+                                raise ConfigException("missing final filter marker")
+                            repl = line[subend+1:replend]
+                            repl = string.replace(repl, '\\'+sep, sep)
+                            config['filters'].append((re.compile(sub), repl))
+                        elif mode == 'ansi':
+                            sep = line[0]
+                            if (string.find(string.digits, sep) != -1 or 
+                                    string.find(string.letters, sep) != -1):
+                                raise ConfigException("invalid regexp marker")
+                            nameend = string.index(line, sep, 1)
+                            if nameend == -1:
+                                raise ConfigException("missing second ansi marker")
+                            name = line[1:nameend]
+                            name = string.replace(name, '\\'+sep, sep)
+                            seqend = string.index(line, sep, nameend+1)
+                            if seqend == -1:
+                                raise ConfigException("missing final ansi marker")
+                            seq = line[nameend+1:seqend]
+                            seq = string.replace(seq, '\\'+sep, sep)
+                            self.ansi[name] = seq
+                        else:
+                            raise ConfigException("this line doesn't belong here!")
+            if config is not None:
+                if nonstdin:
+                    self.configs.append(config)
+                if stdin and self.stdinconfig is None:
+                    self.stdinconfig = config
+                if default:
+                    self.default = config
+            if self.stdinconfig is None:
+                self.stdinconfig = self.default
+            self.checkconfigs()
+        except ConfigException, e:
+            print >>sys.stderr, "configuration error! " + str(e) \
+                + " at line " + str(lineno) + "."
+            print >>sys.stderr, "using no config!"
+            self.default = self.defaultdefault.copy()
+            self.configs = []
             self.stdinconfig = self.default
-        self.checkconfigs()
+            self.ansi = self.defaultansi.copy()
+            return
 
     # check the configs and remove unrecognized colors.
     def checkconfigs(self):
@@ -572,7 +562,7 @@ class ConfigFile:
     def getstdinconfig(self):
         return (self.ansi, self.stdinconfig['colors'], 
             lambda x, f=self.stdinconfig['filters']: 
-            reduce(lambda y, z, f=f: re.sub(z[0],z[1],y), f, x))
+              reduce(lambda y, z, f=f: re.sub(z[0],z[1],y), f, x))
 
     # get the config to use when coloring the file filename. filename should
     # not be a full pathname.
@@ -586,7 +576,7 @@ class ConfigFile:
                 break
         return (self.ansi, colors, 
             lambda x, f=filters: 
-            reduce(lambda y, z, f=f: z[0].sub(z[1],y), f, x))
+              reduce(lambda y, z, f=f: z[0].sub(z[1],y), f, x))
 
 # jython doesn't provide os.access, so we'll define it here.
 if not hasattr(os, 'access'):
@@ -618,4 +608,5 @@ if not hasattr(os, 'access'):
         pass
 
 # now we'll call main()...
-main()
+if __name__ == '__main__':
+    main()
