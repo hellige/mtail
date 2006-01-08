@@ -130,6 +130,8 @@ class TailerThread(threading.Thread):
             if line[len(line)-1] == '\n':
                 line = line[:len(line)-1]
             line = filter(line)
+            if line is None:
+                break
             lock.acquire()
             try:
                 if (multiple or verbose) and (not silent) \
@@ -498,21 +500,26 @@ class ConfigFile:
                                 raise ConfigException("missing color")
                             config['colors'].append((re.compile(rexp), color))
                         elif mode == 'filters':
-                            sep = line[0]
-                            if (string.find(string.digits, sep) != -1 or 
-                                    string.find(string.letters, sep) != -1):
-                                raise ConfigException("invalid regexp marker")
-                            subend = string.index(line, sep, 1)
-                            if subend == -1:
-                                raise ConfigException("missing second filter marker")
-                            sub = line[1:subend]
-                            sub = string.replace(sub, '\\'+sep, sep)
-                            replend = string.index(line, sep, subend+1)
-                            if subend == -1:
-                                raise ConfigException("missing final filter marker")
-                            repl = line[subend+1:replend]
-                            repl = string.replace(repl, '\\'+sep, sep)
-                            config['filters'].append((re.compile(sub), repl))
+                            if string.find(line, 'deny') == 0:
+                                print "dropping"
+                            elif string.find(line, 'allow') == 0:
+                                print "allowing"
+                            else:
+                                sep = line[0]
+                                if (string.find(string.digits, sep) != -1 or 
+                                        string.find(string.letters, sep) != -1):
+                                    raise ConfigException("invalid regexp marker")
+                                subend = string.index(line, sep, 1)
+                                if subend == -1:
+                                    raise ConfigException("missing second filter marker")
+                                sub = line[1:subend]
+                                sub = string.replace(sub, '\\'+sep, sep)
+                                replend = string.index(line, sep, subend+1)
+                                if subend == -1:
+                                    raise ConfigException("missing final filter marker")
+                                repl = line[subend+1:replend]
+                                repl = string.replace(repl, '\\'+sep, sep)
+                                config['filters'].append((re.compile(sub), repl))
                         elif mode == 'ansi':
                             sep = line[0]
                             if (string.find(string.digits, sep) != -1 or 
@@ -560,9 +567,11 @@ class ConfigFile:
 
     # get the config to use when coloring stdin
     def getstdinconfig(self):
-        return (self.ansi, self.stdinconfig['colors'], 
-            lambda x, f=self.stdinconfig['filters']: 
-              reduce(lambda y, z, f=f: re.sub(z[0],z[1],y), f, x))
+        def filter_line(line):
+            for filter in self.stdinconfig['filters']:
+                line = re.sub(filter[0], filter[1], line)
+            return line
+        return (self.ansi, self.stdinconfig['colors'], filter_line)
 
     # get the config to use when coloring the file filename. filename should
     # not be a full pathname.
@@ -574,9 +583,11 @@ class ConfigFile:
                 colors = config['colors']
                 filters = config['filters']
                 break
-        return (self.ansi, colors, 
-            lambda x, f=filters: 
-              reduce(lambda y, z, f=f: z[0].sub(z[1],y), f, x))
+        def filter_line(line):
+            for filter in filters:
+                line = re.sub(filter[0], filter[1], line)
+            return line
+        return (self.ansi, colors, filter_line)
 
 # jython doesn't provide os.access, so we'll define it here.
 if not hasattr(os, 'access'):
