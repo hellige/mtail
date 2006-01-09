@@ -179,7 +179,9 @@ def processargs():
             if hasattr(sys.stdout, 'isatty'):
                 tty_only = 1
             else:
-                print >>sys.stderr, 'this platform does not provide tty detection. ignoring --tty...'
+                print >>sys.stderr, \
+                    'this platform does not provide tty detection. '\
+                    + 'ignoring --tty...'
                 print >>sys.stderr
                 tty_only = 0
         elif opt[0] in ['--config']:
@@ -317,21 +319,21 @@ class TailFile:
             return
         pos = self.file.tell()
         while pos != 0:
-            pos -= bufsize
+            pos = pos - bufsize
             if pos < 0:
                 # jython gets confused about int/long between file.tell() and
                 # file.read(). truncating this to an in here should always 
                 # be safe, since our initial sizes are only 2048, and pos
                 # can only end up negative if the result of tell() is less
                 # than bufsize...
-                bytestoread += int(pos)
+                bytestoread = bytestoread + int(pos)
                 pos = 0
             self.file.seek(pos)
             buf = self.file.read(bytestoread)
             j = bytestoread-1
             while j >= 0:
                 if buf[j] == '\n':
-                    lines -= 1
+                    lines = lines - 1
                     if lines < 0:
                         self.file.seek(pos+j+1)
                         return
@@ -352,10 +354,9 @@ class TailFile:
 # how to read and parse a config file (via loadconfig()), and return the 
 # appropriate configuration to use for a given filename (via getconfig())
 # and for stdin (via getstdinconfig()).
-
 #
-# it's also pretty ugly... it might not be so bad if i hadn't written it at
-# three in the morning. 
+# long-time fans may recognize that this code has been greatly improved, but 
+# it's still pretty awful...
 class ConfigFile:
     # filename of our config file
     filename = None
@@ -393,6 +394,9 @@ class ConfigFile:
     # and make them the default...
     ansi = defaultansi.copy()
 
+    # a filter class implementating regexp-based substitution. the filter
+    # method replaces occurrences of regex with the substitution text, which
+    # may use \1, etc., to refer to groups matched by the regexp.
     class SubstitutionFilter:
         def __init__(self, regex, subst):
             self.regex = regex
@@ -401,6 +405,9 @@ class ConfigFile:
         def filter(self, line):
             return (line[0], re.sub(regex, subst, line[1]))
             
+    # a filter class implementing per-line allow/deny. a line matching regex
+    # will be either allowed or denied based on the setting of allow (a true 
+    # value allows the line, a false value denies it).
     class AllowDenyFilter:
         def __init__(self, regex, allow):
             self.allow = allow
@@ -429,6 +436,71 @@ class ConfigFile:
         # it won't be used outside of this method...
         class ConfigException(Exception):
             pass
+
+        # checks whether a character is a valid regexp marker. if so,
+        # the character is returned. if not, a ConfigException is raised.
+        def check_re_marker(sep):
+            if (string.find(string.digits, sep) != -1 or 
+                    string.find(string.letters, sep) != -1):
+                raise ConfigException("invalid regexp marker")
+            return sep
+
+        # parses and returns a regexp from the given string. the regexp
+        # must be delimited by a non-alphanumeric character. raises
+        # ConfigException if anything goes wrong...
+        def parse_re(line):
+            sep = check_re_marker(line[0])
+            reend = string.index(line, sep, 1)
+            if reend == -1:
+                raise ConfigException("missing regexp end marker")
+            rexp = line[1:reend]
+            rexp = string.replace(rexp, '\\'+sep, sep)
+            return rexp, reend
+
+        # parses a filter specification (allow, deny, or replace) from the
+        # given string. returns a filter object or raises ConfigException.
+        def parse_filter(line):
+            # a line like "deny /foo/" becomes a deny filter...
+            if string.find(line, 'deny') == 0:
+                line = string.strip(line[4:])
+                (rexp, _) = parse_re(line)
+                return self.AllowDenyFilter(re.compile(rexp), 0)
+            # a line like "allow /foo/" becomes an allow filter...
+            elif string.find(line, 'allow') == 0:
+                line = string.strip(line[5:])
+                (rexp, _) = parse_re(line)
+                return self.AllowDenyFilter(re.compile(rexp), 1)
+            # and a line like "/regex/subst/" becomes a substitution filter...
+            else:
+                sep = check_re_marker(line[0])
+                subend = string.index(line, sep, 1)
+                if subend == -1:
+                    raise ConfigException("missing second filter marker")
+                sub = line[1:subend]
+                sub = string.replace(sub, '\\'+sep, sep)
+                replend = string.index(line, sep, subend+1)
+                if subend == -1:
+                    raise ConfigException("missing final filter marker")
+                repl = line[subend+1:replend]
+                repl = string.replace(repl, '\\'+sep, sep)
+                return self.SubstitutionFilter(re.compile(sub), repl)
+
+        # parses a coloring specification from the given string.
+        # returns a pair (color name, output sequence) or raises
+        # ConfigException.
+        def parse_ansi(line):
+            sep = check_re_marker(line[0])
+            nameend = string.index(line, sep, 1)
+            if nameend == -1:
+                raise ConfigException("missing second ansi marker")
+            name = line[1:nameend]
+            name = string.replace(name, '\\'+sep, sep)
+            seqend = string.index(line, sep, nameend+1)
+            if seqend == -1:
+                raise ConfigException("missing final ansi marker")
+            seq = line[nameend+1:seqend]
+            seq = string.replace(seq, '\\'+sep, sep)
+            return (name, seq)
 
         config = None
         mode = None
@@ -463,15 +535,7 @@ class ConfigFile:
                                 default = 1
                                 files = string.lstrip(files[7:])
                             else:
-                                sep = files[0]
-                                if (string.find(string.digits, sep) != -1 or 
-                                        string.find(string.letters, sep) != -1):
-                                    raise ConfigException("invalid regexp marker")
-                                reend = string.index(files, sep, 1)
-                                if reend == -1:
-                                    raise ConfigException("missing regexp end marker")
-                                rexp = files[1:reend]
-                                rexp = string.replace(rexp, '\\'+sep, sep)
+                                (rexp, reend) = parse_re(files)
                                 if filesre is None:
                                     filesre = '('+rexp+')'
                                 else:
@@ -496,90 +560,29 @@ class ConfigFile:
                         config = None
                     elif string.find(line, 'colors:') == 0:
                         if config is None:
-                            raise ConfigException("'colors:' found outside of 'files:' block")
+                            raise ConfigException(\
+                                "'colors:' found outside of 'files:' block")
                         mode = 'colors'
                     elif string.find(line, 'filters:') == 0:
                         if config is None:
-                            raise ConfigException("'filters:' found outside of 'files:' block")
+                            raise ConfigException(\
+                                "'filters:' found outside of 'files:' block")
                         mode = 'filters'
                     else:
                         if mode == 'colors':
-                            sep = line[0]
-                            if (string.find(string.digits, sep) != -1 or 
-                                    string.find(string.letters, sep) != -1):
-                                raise ConfigException("invalid regexp marker")
-                            reend = string.index(line, sep, 1)
-                            if reend == -1:
-                                raise ConfigException("missing regexp end marker")
-                            rexp = line[1:reend]
-                            rexp = string.replace(rexp, '\\'+sep, sep)
+                            (rexp, reend) = parse_re(line)
                             color = string.strip(line[reend+1:])
                             if len(color)==0:
                                 raise ConfigException("missing color")
                             config['colors'].append((re.compile(rexp), color))
                         elif mode == 'filters':
-                            if string.find(line, 'deny') == 0:
-                                line = string.strip(line[4:])
-                                sep = line[0]
-                                if (string.find(string.digits, sep) != -1 or 
-                                        string.find(string.letters, sep) != -1):
-                                    raise ConfigException("invalid regexp marker")
-                                reend = string.index(line, sep, 1)
-                                if reend == -1:
-                                    raise ConfigException("missing regexp end marker")
-                                rexp = line[1:reend]
-                                rexp = string.replace(rexp, '\\'+sep, sep)
-                                config['filters'].append(\
-                                    self.AllowDenyFilter(re.compile(rexp), 0))
-                            elif string.find(line, 'allow') == 0:
-                                line = string.strip(line[5:])
-                                sep = line[0]
-                                if (string.find(string.digits, sep) != -1 or 
-                                        string.find(string.letters, sep) != -1):
-                                    raise ConfigException("invalid regexp marker")
-                                reend = string.index(line, sep, 1)
-                                if reend == -1:
-                                    raise ConfigException("missing regexp end marker")
-                                rexp = line[1:reend]
-                                rexp = string.replace(rexp, '\\'+sep, sep)
-                                config['filters'].append(\
-                                    self.AllowDenyFilter(re.compile(rexp), 1))
-                            else:
-                                sep = line[0]
-                                if (string.find(string.digits, sep) != -1 or 
-                                        string.find(string.letters, sep) != -1):
-                                    raise ConfigException("invalid regexp marker")
-                                subend = string.index(line, sep, 1)
-                                if subend == -1:
-                                    raise ConfigException("missing second filter marker")
-                                sub = line[1:subend]
-                                sub = string.replace(sub, '\\'+sep, sep)
-                                replend = string.index(line, sep, subend+1)
-                                if subend == -1:
-                                    raise ConfigException("missing final filter marker")
-                                repl = line[subend+1:replend]
-                                repl = string.replace(repl, '\\'+sep, sep)
-                                config['filters'].append(\
-                                    self.SubstitutionFilter(re.compile(sub), \
-                                    repl))
+                            config['filters'].append(parse_filter(line))
                         elif mode == 'ansi':
-                            sep = line[0]
-                            if (string.find(string.digits, sep) != -1 or 
-                                    string.find(string.letters, sep) != -1):
-                                raise ConfigException("invalid regexp marker")
-                            nameend = string.index(line, sep, 1)
-                            if nameend == -1:
-                                raise ConfigException("missing second ansi marker")
-                            name = line[1:nameend]
-                            name = string.replace(name, '\\'+sep, sep)
-                            seqend = string.index(line, sep, nameend+1)
-                            if seqend == -1:
-                                raise ConfigException("missing final ansi marker")
-                            seq = line[nameend+1:seqend]
-                            seq = string.replace(seq, '\\'+sep, sep)
+                            (name, seq) = parse_ansi(line)
                             self.ansi[name] = seq
                         else:
-                            raise ConfigException("this line doesn't belong here!")
+                            raise ConfigException(\
+                                "this line doesn't belong here!")
             if config is not None:
                 if nonstdin:
                     self.configs.append(config)
@@ -600,24 +603,29 @@ class ConfigFile:
             self.ansi = self.defaultansi.copy()
             return
 
-    # check the configs and remove unrecognized colors.
+    # check the configs and remove unrecognized colors. since ansi blocks
+    # can appear anywhere, we need to do this after we've finished parsing.
     def checkconfigs(self):
         for config in self.configs + [self.stdinconfig, self.default]:
             for color in config['colors']:
                 if not self.ansi.has_key(color[1]):
                     config['colors'].remove(color)
 
-    # get the config to use when coloring stdin
-    def getstdinconfig(self):
+    # returns a function to filter input lines by applying the specified
+    # filters, in order.
+    def __makefilter(self, filters):
         def filter_line(line):
             line = (1, line)
-            for filter in self.stdinconfig['filters']:
+            for filter in filters:
                 line = filter.filter(line)
             if line[0]:
                 return line[1]
-            else:
-                return None
-        return (self.ansi, self.stdinconfig['colors'], filter_line)
+        return filter_line
+
+    # get the config to use when coloring stdin
+    def getstdinconfig(self):
+        return (self.ansi, self.stdinconfig['colors'], \
+            self.__makefilter(self.stdinconfig['filters']))
 
     # get the config to use when coloring the file filename. filename should
     # not be a full pathname.
@@ -629,15 +637,7 @@ class ConfigFile:
                 colors = config['colors']
                 filters = config['filters']
                 break
-        def filter_line(line):
-            line = (1, line)
-            for filter in filters:
-                line = filter.filter(line)
-            if line[0]:
-                return line[1]
-            else:
-                return None
-        return (self.ansi, colors, filter_line)
+        return (self.ansi, colors, self.__makefilter(filters))
 
 # jython doesn't provide os.access, so we'll define it here.
 if not hasattr(os, 'access'):
