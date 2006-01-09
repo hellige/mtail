@@ -10,6 +10,14 @@ option and support for allow/deny filters. this README will be expanded in
 future versions, and there are a few other features i'd like to add, but i'm
 not planning on going overboard: i believe in small tools for small jobs.
 
+  - 'drop' filters
+  - jython
+  - better api 
+  - regexp cfg selection
+  - mailing list
+  - python version support?
+  - --tty
+
 mtail now requires thread support from python. please let me know if this
 is inconvenient and i can add support for a single-file, non-threaded 
 mode.
