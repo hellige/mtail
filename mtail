@@ -380,7 +380,7 @@ class ConfigFile:
             self.subst = subst
 
         def filter(self, line):
-            return (line[0], re.sub(regex, subst, line[1]))
+            return (line[0], re.sub(self.regex, self.subst, line[1]))
             
     # a filter class implementing per-line allow/deny. a line matching regex
     # will be either allowed or denied based on the setting of allow (a true 
