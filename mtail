@@ -360,39 +360,16 @@ class TailFile:
 class ConfigFile:
     # filename of our config file
     filename = None
-    # configs with file regexps
-    configs = []
-    # config for stdin
-    stdinconfig = None
-    # default default config (since default can be overridden in the config,
-    # and we may need to recover our true default state...)
-    defaultdefault = {
-        'colors': [],
-        'filters': []
-    }
-    # default config
-    default = defaultdefault.copy()
-    # these are the default ansi escape sequences we use... 
-    defaultansi = {}
-    defaultansi["black"]         = "\033[0;30m"
-    defaultansi["red"]           = "\033[0;31m"                
-    defaultansi["green"]         = "\033[0;32m"
-    defaultansi["yellow"]        = "\033[0;33m"
-    defaultansi["blue"]          = "\033[0;34m"
-    defaultansi["magenta"]       = "\033[0;35m"
-    defaultansi["cyan"]          = "\033[0;36m"
-    defaultansi["white"]         = "\033[0;37m"
-    defaultansi["brightblack"]   = "\033[1;30m"
-    defaultansi["brightred"]     = "\033[1;31m"
-    defaultansi["brightgreen"]   = "\033[1;32m"
-    defaultansi["brightyellow"]  = "\033[1;33m"
-    defaultansi["brightblue"]    = "\033[1;34m"
-    defaultansi["brightmagenta"] = "\033[1;35m"
-    defaultansi["brightcyan"]    = "\033[1;36m"
-    defaultansi["brightwhite"]   = "\033[1;37m"
-    defaultansi["reset"]         = "\033[0m"
-    # and make them the default...
-    ansi = defaultansi.copy()
+
+    # instances of Config represent individual config sections
+    # ('files:' blocks, basically)
+    class Config:
+        def __init__(self):
+            self.colors = []
+            self.filters = []
+            self.files = None
+            self.stdin = 0
+            self.default = 0
 
     # a filter class implementating regexp-based substitution. the filter
     # method replaces occurrences of regex with the substitution text, which
@@ -421,21 +398,42 @@ class ConfigFile:
     # create a new ConfigFile representation with the given filename.
     def __init__(self, filename):
         self.filename = filename
+        self.reset()
     
+    def reset(self):
+        # configs with file regexps
+        self.configs = []
+        # config for stdin
+        self.stdinconfig = None
+        # default config
+        self.default = self.Config()
+        # default ansi escapes... copy these since config loading
+        # might overwrite some of them...
+        self.ansi = DEFAULTANSI.copy()
+
     # load all configs from the file, parse and store internally.
     def loadconfig(self):
+        self.reset()
+
         if self.filename is None or not (os.path.exists(self.filename) 
                 and os.path.isfile(self.filename)
                 and os.access(self.filename, os.R_OK)):
-            self.stdinconfig = self.default
-            self.configs = []
-            self.ansi = self.defaultansi.copy()
             return
 
         # we'll use ConfigException to signal config errors while parsing.
         # it won't be used outside of this method...
         class ConfigException(Exception):
             pass
+
+        # adds the specified config to this object's list of configs.
+        def add_config(config):
+            if config is not None:
+                if config.files:
+                    self.configs.append(config)
+                if config.stdin and self.stdinconfig is None:
+                    self.stdinconfig = config
+                if config.default:
+                    self.default = config
 
         # checks whether a character is a valid regexp marker. if so,
         # the character is returned. if not, a ConfigException is raised.
@@ -503,10 +501,8 @@ class ConfigFile:
             return (name, seq)
 
         config = None
-        mode = None
-        stdin = 0
-        default = 0
-        nonstdin = 0
+        state = None
+        ANSI, COLORS, FILTERS = 0, 1, 2
         lineno = 0
         file = open(self.filename, "r")
         try:
@@ -515,24 +511,17 @@ class ConfigFile:
                 line = string.strip(line)
                 if len(line) > 0 and line[0] != '#':
                     if string.find(line, "files:") == 0:
-                        if config is not None:
-                            if nonstdin:
-                                self.configs.append(config)
-                            if stdin and self.stdinconfig is None:
-                                self.stdinconfig = config
-                            if default:
-                                self.default = config
-                        stdin = 0
-                        nonstdin = 0
-                        default = 0
+                        add_config(config)
+                        config = self.Config()
+                        state = None
                         filesre = None
                         files = string.strip(line[6:])
                         while len(files) > 0:
                             if string.find(files, 'stdin') == 0:
-                                stdin = 1
+                                config.stdin = 1
                                 files = string.lstrip(files[5:])
                             elif string.find(files, 'default') == 0:
-                                default = 1
+                                config.default = 1
                                 files = string.lstrip(files[7:])
                             else:
                                 (rexp, reend) = parse_re(files)
@@ -541,75 +530,53 @@ class ConfigFile:
                                 else:
                                     filesre = filesre+'|('+rexp+')'
                                 files = string.lstrip(files[reend+1:])
-                        config = {}
                         if filesre is not None:
-                            nonstdin = 1
-                            config['files'] = re.compile(filesre)
-                        config['colors'] = []
-                        config['filters'] = []
-                        mode = None
+                            config.files = re.compile(filesre)
                     elif string.find(line, 'ansi:') == 0:
-                        if config is not None:
-                            if nonstdin:
-                                self.configs.append(config)
-                            if stdin and self.stdinconfig is None:
-                                self.stdinconfig = config
-                            if default:
-                                self.default = config
-                        mode = 'ansi'
+                        add_config(config)
                         config = None
+                        state = ANSI
                     elif string.find(line, 'colors:') == 0:
                         if config is None:
                             raise ConfigException(\
                                 "'colors:' found outside of 'files:' block")
-                        mode = 'colors'
+                        state = COLORS
                     elif string.find(line, 'filters:') == 0:
                         if config is None:
                             raise ConfigException(\
                                 "'filters:' found outside of 'files:' block")
-                        mode = 'filters'
+                        state = FILTERS
                     else:
-                        if mode == 'colors':
+                        if state == COLORS:
                             (rexp, reend) = parse_re(line)
                             color = string.strip(line[reend+1:])
                             if len(color)==0:
                                 raise ConfigException("missing color")
-                            config['colors'].append((re.compile(rexp), color))
-                        elif mode == 'filters':
-                            config['filters'].append(parse_filter(line))
-                        elif mode == 'ansi':
+                            config.colors.append((re.compile(rexp), color))
+                        elif state == FILTERS:
+                            config.filters.append(parse_filter(line))
+                        elif state == ANSI:
                             (name, seq) = parse_ansi(line)
                             self.ansi[name] = seq
                         else:
                             raise ConfigException(\
                                 "this line doesn't belong here!")
-            if config is not None:
-                if nonstdin:
-                    self.configs.append(config)
-                if stdin and self.stdinconfig is None:
-                    self.stdinconfig = config
-                if default:
-                    self.default = config
-            if self.stdinconfig is None:
-                self.stdinconfig = self.default
+            add_config(config)
             self.checkconfigs()
         except ConfigException, e:
             print >>sys.stderr, "configuration error! " + str(e) \
                 + " at line " + str(lineno) + "."
             print >>sys.stderr, "using no config!"
-            self.default = self.defaultdefault.copy()
-            self.configs = []
-            self.stdinconfig = self.default
-            self.ansi = self.defaultansi.copy()
+            self.reset()
             return
 
     # check the configs and remove unrecognized colors. since ansi blocks
     # can appear anywhere, we need to do this after we've finished parsing.
     def checkconfigs(self):
         for config in self.configs + [self.stdinconfig, self.default]:
-            for color in config['colors']:
+            for color in config.colors:
                 if not self.ansi.has_key(color[1]):
-                    config['colors'].remove(color)
+                    config.colors.remove(color)
 
     # returns a function to filter input lines by applying the specified
     # filters, in order.
@@ -624,20 +591,44 @@ class ConfigFile:
 
     # get the config to use when coloring stdin
     def getstdinconfig(self):
-        return (self.ansi, self.stdinconfig['colors'], \
-            self.__makefilter(self.stdinconfig['filters']))
+        if self.stdinconfig is not None:
+            return (self.ansi, self.stdinconfig.colors, \
+                self.__makefilter(self.stdinconfig.filters))
+        else:
+            return (self.ansi, self.default.colors, \
+                self.__makefilter(self.default.filters))
 
     # get the config to use when coloring the file filename. filename should
     # not be a full pathname.
     def getconfig(self, filename):
-        colors = self.default['colors']
-        filters = self.default['filters']
+        colors = self.default.colors
+        filters = self.default.filters
         for config in self.configs:
-            if config['files'].match(filename):
-                colors = config['colors']
-                filters = config['filters']
+            if config.files.match(filename):
+                colors = config.colors
+                filters = config.filters
                 break
         return (self.ansi, colors, self.__makefilter(filters))
+
+# these are the default ansi escape sequences we use... 
+DEFAULTANSI = {}
+DEFAULTANSI["black"]         = "\033[0;30m"
+DEFAULTANSI["red"]           = "\033[0;31m"                
+DEFAULTANSI["green"]         = "\033[0;32m"
+DEFAULTANSI["yellow"]        = "\033[0;33m"
+DEFAULTANSI["blue"]          = "\033[0;34m"
+DEFAULTANSI["magenta"]       = "\033[0;35m"
+DEFAULTANSI["cyan"]          = "\033[0;36m"
+DEFAULTANSI["white"]         = "\033[0;37m"
+DEFAULTANSI["brightblack"]   = "\033[1;30m"
+DEFAULTANSI["brightred"]     = "\033[1;31m"
+DEFAULTANSI["brightgreen"]   = "\033[1;32m"
+DEFAULTANSI["brightyellow"]  = "\033[1;33m"
+DEFAULTANSI["brightblue"]    = "\033[1;34m"
+DEFAULTANSI["brightmagenta"] = "\033[1;35m"
+DEFAULTANSI["brightcyan"]    = "\033[1;36m"
+DEFAULTANSI["brightwhite"]   = "\033[1;37m"
+DEFAULTANSI["reset"]         = "\033[0m"
 
 # jython doesn't provide os.access, so we'll define it here.
 if not hasattr(os, 'access'):
