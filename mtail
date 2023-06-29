@@ -6,13 +6,13 @@
 
 # http://matt.immute.net/src/mtail
 #
-# this utility is derived in part from colortail-0.3.0 by joakim andersson 
+# this utility is derived in part from colortail-0.3.0 by joakim andersson
 # (pt98jan@student.hk-r.se). it is an improvement on that work in several
 # areas:
 #   - it is roughly 500 lines of code, rather than roughly 3500.
 #   - it does not dump core when it encounters long lines.
 #   - the regexp matching process is simpler and, in my opinion, more intuitive.
-#   - there is only one config file, which contains coloring rules for an 
+#   - there is only one config file, which contains coloring rules for an
 #     arbitrary number of files.
 #   - my coloring algorithm only generates escape codes when the color actually
 #     needs changing, rather than around every single character.
@@ -39,7 +39,7 @@ if 'HOME' in os.environ:
 else:
     config_file = None
 # version number
-version_number = "1.2.0"
+version_number = "1.3.0"
 
 # stuff to make sure that we print banners correctly when tailing multiple
 # files. we need to lock around the printing of each line to guarantee that
@@ -91,7 +91,7 @@ class TailerThread(threading.Thread):
         self.filename = filename
         self.follow = follow
         self.config = config
-    
+
     def run(self):
         global active
         try:
@@ -107,8 +107,8 @@ class TailerThread(threading.Thread):
     def do_run(self):
         global last_filename
         if self.filename != None:
-            ansi, colors, filter = self.config.getconfig(self.filename[string\
-                .rfind(self.filename, os.sep)+1:])
+            ansi, colors, filter = self.config.getconfig(self.filename[
+                self.filename.rfind(os.sep)+1:])
             tailer = TailFile(self.filename, self.follow)
             tailer.seek_lines(self.initial_lines)
         else:
@@ -225,13 +225,13 @@ tail.
 
 ''' % (version_number, sys.argv[0]), file=sys.stderr)
 
-# colorizes a line, returning a string suitable for printing to a 
+# colorizes a line, returning a string suitable for printing to a
 # terminal.
 def colorize(ansi, colors, line):
     if line == "":
         return line
     colarray = len(line)*[None]
-    # match each regexp in turn, and paint in the color array in the right 
+    # match each regexp in turn, and paint in the color array in the right
     # place(s)...
     for colpair in colors:
         pos = 0
@@ -266,7 +266,7 @@ def colorize(ansi, colors, line):
 # it also provides a seek_file(n) method which places the file pointer
 # n lines from the end of the file.
 #
-# i'm not going to document it any further... it's pretty nasty, but 
+# i'm not going to document it any further... it's pretty nasty, but
 # straightforward.
 class TailFile:
     position = 0
@@ -321,7 +321,7 @@ class TailFile:
             pos = pos - bufsize
             if pos < 0:
                 # jython gets confused about int/long between file.tell() and
-                # file.read(). truncating this to an in here should always 
+                # file.read(). truncating this to an in here should always
                 # be safe, since our initial sizes are only 2048, and pos
                 # can only end up negative if the result of tell() is less
                 # than bufsize...
@@ -350,11 +350,11 @@ class TailFile:
         return end - self.file.tell()
 
 # this class provides an abstraction of the mtail config file. it knows
-# how to read and parse a config file (via loadconfig()), and return the 
+# how to read and parse a config file (via loadconfig()), and return the
 # appropriate configuration to use for a given filename (via getconfig())
 # and for stdin (via getstdinconfig()).
 #
-# long-time fans may recognize that this code has been greatly improved, but 
+# long-time fans may recognize that this code has been greatly improved, but
 # it's still pretty awful...
 class ConfigFile:
     # filename of our config file
@@ -380,9 +380,9 @@ class ConfigFile:
 
         def filter(self, line):
             return (line[0], re.sub(self.regex, self.subst, line[1]))
-            
+
     # a filter class implementing per-line allow/deny. a line matching regex
-    # will be either allowed or denied based on the setting of allow (a true 
+    # will be either allowed or denied based on the setting of allow (a true
     # value allows the line, a false value denies it).
     class AllowDenyFilter:
         def __init__(self, regex, allow):
@@ -398,7 +398,7 @@ class ConfigFile:
     def __init__(self, filename):
         self.filename = filename
         self.reset()
-    
+
     def reset(self):
         # configs with file regexps
         self.configs = []
@@ -414,7 +414,7 @@ class ConfigFile:
     def loadconfig(self):
         self.reset()
 
-        if self.filename is None or not (os.path.exists(self.filename) 
+        if self.filename is None or not (os.path.exists(self.filename)
                 and os.path.isfile(self.filename)
                 and os.access(self.filename, os.R_OK)):
             return
@@ -437,7 +437,7 @@ class ConfigFile:
         # checks whether a character is a valid regexp marker. if so,
         # the character is returned. if not, a ConfigException is raised.
         def check_re_marker(sep):
-            if (string.digits.find(sep) != -1 or 
+            if (string.digits.find(sep) != -1 or
                     string.ascii_letters.find(sep) != -1):
                 raise ConfigException("invalid regexp marker")
             return sep
@@ -609,10 +609,10 @@ class ConfigFile:
                 break
         return (self.ansi, colors, self.__makefilter(filters))
 
-# these are the default ansi escape sequences we use... 
+# these are the default ansi escape sequences we use...
 DEFAULTANSI = {}
 DEFAULTANSI["black"]         = "\033[0;30m"
-DEFAULTANSI["red"]           = "\033[0;31m"                
+DEFAULTANSI["red"]           = "\033[0;31m"
 DEFAULTANSI["green"]         = "\033[0;32m"
 DEFAULTANSI["yellow"]        = "\033[0;33m"
 DEFAULTANSI["blue"]          = "\033[0;34m"
@@ -640,7 +640,7 @@ if not hasattr(os, 'access'):
         os.F_OK = 1
         os.R_OK = 2
         os.W_OK = 4
-     
+
         # this code came from the jython-users list in 2002, courtesy of
         # graham klyne.
         def os_access(path, mode):
