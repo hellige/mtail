@@ -1,4 +1,4 @@
-This is a file tailer with color support, written in Python. it has a
+This is a replacement for `tail`, written in Python. it has a
 [modest home page](http://matt.immute.net/src/mtail).
 
 Please see usage (`mtail -?`) for details. The config file format is
