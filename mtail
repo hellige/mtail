@@ -85,8 +85,7 @@ def handleInterrupt(num, frame):
 # and loops.
 class TailerThread(threading.Thread):
     def __init__(self, initial_lines, filename, follow, config):
-        threading.Thread.__init__(self)
-        self.setDaemon(1)
+        threading.Thread.__init__(self, daemon=True)
         self.initial_lines = initial_lines
         self.filename = filename
         self.follow = follow
