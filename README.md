@@ -1,5 +1,5 @@
 This is a file tailer with color support, written in Python. it has a
-modest home page at 'http://matt.immute.net/src/mtail'.
+[modest home page](http://matt.immute.net/src/mtail).
 
 Please see usage (`mtail -?`) for details. The config file format is
 described in [`mtailrc.sample`](mtailrc.sample), which you should copy to
