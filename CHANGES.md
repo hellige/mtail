@@ -3,7 +3,7 @@ mtail 1.3.0:
     (@lucasvr) for this work!
 
 mtail 1.2.0:
-  * added --tty option. if --tty is specified and stdout is not a tty, 
+  * added --tty option. if --tty is specified and stdout is not a tty,
     no coloring is performed, although filters still apply. this is similar in
     spirit to the --color=auto option of gnu ls (thanks to hisham muhammad for
     this idea).

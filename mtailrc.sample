@@ -1,7 +1,5 @@
 # sample .mtailrc
 #
-# matt hellige (matt@immute.net)
-#
 # the format of this config file is pretty straightforward, and pretty concise.
 # this sample is long and ugly only because it is copiously commented. comments
 # must be on their own line. whitespace (apart from newlines) is ignored.  all
