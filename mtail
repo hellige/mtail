@@ -28,16 +28,16 @@ import sys
 import stat
 import os
 import threading
-try:
-    import signal
-except:
-    signal = None
+import signal
+import textwrap
+from typing import Optional
+
 
 # config file location. this should be made platform-independent...
+config_file = None
 if 'HOME' in os.environ:
     config_file = os.environ['HOME']+os.sep+'.mtailrc'
-else:
-    config_file = None
+
 # version number
 version_number = "1.3.0"
 
@@ -52,6 +52,7 @@ verbose = 0
 silent = 0
 active = 0
 tty_only = 0
+
 
 # sets up the interrupt handler, calls processargs(), sets up and starts the
 # tailers.
@@ -77,9 +78,11 @@ def main():
         if event.is_set():
             sys.exit(0)
 
+
 # signal handler for keyboard interrupts... just exits.
 def handleInterrupt(num, frame):
     sys.exit(0)
+
 
 # a simple thread that gets a config for a filename, initializes a tailer,
 # and loops.
@@ -95,7 +98,7 @@ class TailerThread(threading.Thread):
         global active
         try:
             self.do_run()
-        except Exception as e:
+        except Exception:
             pass
         lock.acquire()
         active = active - 1
@@ -105,7 +108,7 @@ class TailerThread(threading.Thread):
 
     def do_run(self):
         global last_filename
-        if self.filename != None:
+        if self.filename is not None:
             ansi, colors, filter = self.config.getconfig(self.filename[
                 self.filename.rfind(os.sep)+1:])
             tailer = TailFile(self.filename, self.follow)
@@ -118,7 +121,8 @@ class TailerThread(threading.Thread):
             tailer = sys.stdin
 
         if tty_only and not sys.stdout.isatty():
-            docolor = lambda ansi, colors, line: line
+            def docolor(ansi, colors, line):
+                return line
         else:
             docolor = colorize
 
@@ -144,6 +148,7 @@ class TailerThread(threading.Thread):
                 sys.exit(1)
             sys.stdout.flush()
             lock.release()
+
 
 # processes the command line arguments.
 def processargs():
@@ -195,34 +200,37 @@ def processargs():
         filenames.append(None)
     return (int(lines), filenames, follow)
 
+
 # prints a usage message.
 def usage():
     global version_number
-    print('''
-mtail %s by matt hellige (matt@immute.net)
+    help = f'''
+        mtail {version_number} by matt hellige (matt@immute.net)
 
-usage: %s [option]... [<filename>]...
-  -?, -h, --help             print this usage info and exit
-      -f, --follow           output appended data as the file grows
-      -n, --lines=N          output the last N lines, instead of the last 10
-      -v, --verbose          always output headers giving file names
-      -q, --quiet, --silent  never output headers giving file names
-      --config=FILE          use config file FILE instead of ~/.mtailrc
-      --tty                  only perform coloring when standard output is
-                             connected to a terminal (tty)
+        usage: {sys.argv[0]} [option]... [<filename>]...
+        -?, -h, --help             print this usage info and exit
+            -f, --follow           output appended data as the file grows
+            -n, --lines=N          output the last N lines, instead of the last 10
+            -v, --verbose          always output headers giving file names
+            -q, --quiet, --silent  never output headers giving file names
+            --config=FILE          use config file FILE instead of ~/.mtailrc
+            --tty                  only perform coloring when standard output is
+                                    connected to a terminal (tty)
 
-with more than one filename, mtail will precede each chunk from
-each with a header giving the file name. if no filenames are given
-or a filename is -, standard input is used, -f is automatically
-set, and -n is ignored.
+        with more than one filename, mtail will precede each chunk from
+        each with a header giving the file name. if no filenames are given
+        or a filename is -, standard input is used, -f is automatically
+        set, and -n is ignored.
 
-this version does not support arguments of the form -N as synonyms
-for -nN, nor does it support -n +N (or --lines +N). -f always
-follows a particular file descriptor rather than a file name, i.e.
-this version does not support the --follow=name behavior of gnu
-tail.
+        this version does not support arguments of the form -N as synonyms
+        for -nN, nor does it support -n +N (or --lines +N). -f always
+        follows a particular file descriptor rather than a file name, i.e.
+        this version does not support the --follow=name behavior of gnu
+        tail.
 
-''' % (version_number, sys.argv[0]), file=sys.stderr)
+        '''
+    print(textwrap.dedent(help), file=sys.stderr)
+
 
 # colorizes a line, returning a string suitable for printing to a
 # terminal.
@@ -259,6 +267,7 @@ def colorize(ansi, colors, line):
     if curcolor is not None:
         colline = colline+ansi["reset"]
     return colline
+
 
 # this class provides a readline() method which reads a complete line,
 # even if it has to block and poll the file for awhile to do so.
@@ -347,6 +356,7 @@ class TailFile:
             self.file.seek(end)
             return 0
         return end - self.file.tell()
+
 
 # this class provides an abstraction of the mtail config file. it knows
 # how to read and parse a config file (via loadconfig()), and return the
@@ -562,7 +572,7 @@ class ConfigFile:
             add_config(config)
             self.checkconfigs()
         except ConfigException as e:
-            print("configuration error! " + str(e) \
+            print("configuration error! " + str(e)
                 + " at line " + str(lineno) + ".", file=sys.stderr)
             print("using no config!", file=sys.stderr)
             self.reset()
@@ -590,10 +600,10 @@ class ConfigFile:
     # get the config to use when coloring stdin
     def getstdinconfig(self):
         if self.stdinconfig is not None:
-            return (self.ansi, self.stdinconfig.colors, \
+            return (self.ansi, self.stdinconfig.colors,
                 self.__makefilter(self.stdinconfig.filters))
         else:
-            return (self.ansi, self.default.colors, \
+            return (self.ansi, self.default.colors,
                 self.__makefilter(self.default.filters))
 
     # get the config to use when coloring the file filename. filename should
@@ -607,6 +617,7 @@ class ConfigFile:
                 filters = config.filters
                 break
         return (self.ansi, colors, self.__makefilter(filters))
+
 
 # these are the default ansi escape sequences we use...
 DEFAULTANSI = {}
@@ -628,35 +639,6 @@ DEFAULTANSI["brightcyan"]    = "\033[1;36m"
 DEFAULTANSI["brightwhite"]   = "\033[1;37m"
 DEFAULTANSI["reset"]         = "\033[0m"
 
-# jython doesn't provide os.access, so we'll define it here.
-if not hasattr(os, 'access'):
-    try:
-        # if we're not in jython, this will fail and we're just out of
-        # luck. but i think everybody else provides os.access(), so that's
-        # probably fine...
-        from java.io import File
 
-        os.F_OK = 1
-        os.R_OK = 2
-        os.W_OK = 4
-
-        # this code came from the jython-users list in 2002, courtesy of
-        # graham klyne.
-        def os_access(path, mode):
-            f = File(path)
-            if mode & os.F_OK:
-                if not f.exists(): return None
-            if mode & os.R_OK:
-                if not f.canRead(): return None
-            if mode & os.W_OK:
-                if not f.canWrite(): return None
-            return 1
-
-        os.access = os_access
-    except:
-        # we're just out of luck, i guess...
-        pass
-
-# now we'll call main()...
 if __name__ == '__main__':
     main()
