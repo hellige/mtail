@@ -30,7 +30,6 @@ import os
 import threading
 import signal
 import textwrap
-from typing import Optional
 
 
 # config file location. this should be made platform-independent...
