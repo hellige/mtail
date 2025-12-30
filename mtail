@@ -581,9 +581,10 @@ class ConfigFile:
     # can appear anywhere, we need to do this after we've finished parsing.
     def checkconfigs(self):
         for config in self.configs + [self.stdinconfig, self.default]:
-            for color in config.colors:
-                if color[1] not in self.ansi:
-                    config.colors.remove(color)
+            if config:
+                for color in config.colors:
+                    if color[1] not in self.ansi:
+                        config.colors.remove(color)
 
     # returns a function to filter input lines by applying the specified
     # filters, in order.
