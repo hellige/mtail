@@ -52,6 +52,8 @@ silent = 0
 active = 0
 tty_only = 0
 
+remove_blanks = 0
+
 
 # sets up the interrupt handler, calls processargs(), sets up and starts the
 # tailers.
@@ -134,6 +136,8 @@ class TailerThread(threading.Thread):
             line = filter(line)
             if line is None:
                 continue
+            if remove_blanks and line == "":
+                continue
             lock.acquire()
             try:
                 if (multiple or verbose) and (not silent) \
@@ -155,12 +159,13 @@ def processargs():
     global silent
     global config_file
     global tty_only
+    global remove_blanks
     filenames = []
     lines = None
     follow = 0
     try:
         opts, pargs = getopt.getopt(sys.argv[1:], 'fn:?hvq', ["follow",
-            "lines=", "help", "verbose", "quiet", "silent", "config=", "tty"])
+            "lines=", "help", "verbose", "quiet", "silent", "config=", "tty", "remove-blanks"])
     except getopt.error:
         print('unrecognized option!', file=sys.stderr)
         print(file=sys.stderr)
@@ -188,6 +193,8 @@ def processargs():
                 tty_only = 0
         elif opt[0] in ['--config']:
             config_file = opt[1]
+        elif opt[0] == '--remove-blanks':
+            remove_blanks = 1
     if lines is None:
         lines = 10
     for filename in pargs:
@@ -212,6 +219,7 @@ def usage():
             -n, --lines=N          output the last N lines, instead of the last 10
             -v, --verbose          always output headers giving file names
             -q, --quiet, --silent  never output headers giving file names
+			--remove-blanks        never output empty lines
             --config=FILE          use config file FILE instead of ~/.mtailrc
             --tty                  only perform coloring when standard output is
                                     connected to a terminal (tty)
