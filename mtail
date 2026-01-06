@@ -51,7 +51,6 @@ verbose = 0
 silent = 0
 active = 0
 tty_only = 0
-
 remove_blanks = 0
 
 
